@@ -5,6 +5,8 @@ import time
 
 import smartBugs
 
+from src.interface.cli import create_parser_with_args
+
 
 class Issue:
     def __init__(self, issue_type: int, name: str):
@@ -31,8 +33,9 @@ class AnalysisResult:
 
 
 STRATEGY = 0.5  # 当有超过多少tools报出漏洞即认为可信
-TOOLS = ["conkas", "mythril", "osiris", "slither", "oyente", "solhint", "smartcheck", "honeybadger", "manticore",
-         "maian", "securify"]
+# TOOLS = ["conkas", "mythril", "osiris", "slither", "oyente", "solhint", "smartcheck", "honeybadger", "manticore",
+#          "maian", "securify"]
+TOOLS = ["honeybadger"]
 # TODO 合并漏洞类型
 ISSUE_UNKNOWN = Issue(0, "未知")
 ISSUE_INTEGER_OVERFLOW = Issue(1, "整数上溢")
@@ -58,10 +61,12 @@ class Contract:
             time_now = time.time()
             time_now_format_list = [time.strftime("%Y%m%d_%H%M", time.localtime(time_now + 60)),
                                     time.strftime("%Y%m%d_%H%M", time.localtime(time_now))]  # 时间可能有误差
-            smartBugs.exec_cmd(argparse.Namespace(tool=i, file=self.filepath))
+            smartBugs.exec_cmd(create_parser_with_args(["-t", i, "-f", self.filepath]))
             flag = False
+            print(time_now_format_list)
             for time_now_format in time_now_format_list:
                 result_json_filepath = "results/{0}/{1}/{2}/result.json".format(i, time_now_format, self.name)
+                print(result_json_filepath)
                 if os.path.exists(result_json_filepath):
                     flag = True
                     break
@@ -255,3 +260,6 @@ def phase_result_json_securify(filepath: str) -> dict[str:Issue]:
 if __name__ == '__main__':
     # TODO
     print("[+]Analyzing start")
+    contract = Contract("arbitrary_location_write_simple", "solidity", "/Users/xiaoyao/PycharmProjects/smartbugs/dataset/access_control/arbitrary_location_write_simple.sol")
+    res = contract.analyze()
+    print(res)

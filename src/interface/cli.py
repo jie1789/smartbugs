@@ -118,67 +118,157 @@ def create_parser():
                 DATASET_CHOICES.append(name[0] + '/' + sbset_name)
 
     # get tools available by parsing the name of the config files
-    tools = [os.path.splitext(f)[0] for f in os.listdir(CONFIG_TOOLS_PATH) if os.path.isfile(os.path.join(CONFIG_TOOLS_PATH, f))]
+    tools = [os.path.splitext(f)[0] for f in os.listdir(CONFIG_TOOLS_PATH) if
+             os.path.isfile(os.path.join(CONFIG_TOOLS_PATH, f))]
     for tool in tools:
         TOOLS_CHOICES.append(tool)
 
     group_source_files.add_argument('-f',
-                        '--file',
-                        nargs='*',
-                        default=[],
-                        help='select solidity file(s) or directories to be analysed')
+                                    '--file',
+                                    nargs='*',
+                                    default=[],
+                                    help='select solidity file(s) or directories to be analysed')
 
     group_source_files.add_argument('--dataset',
-                        choices=DATASET_CHOICES,
-                        help='pre made datasets',
-                        nargs='+')
+                                    choices=DATASET_CHOICES,
+                                    help='pre made datasets',
+                                    nargs='+')
 
     group_tools.add_argument('-t',
-                        '--tool',
-                        choices=TOOLS_CHOICES,
-                        nargs='+',
-                        help='select tool(s)')
+                             '--tool',
+                             choices=TOOLS_CHOICES,
+                             nargs='+',
+                             help='select tool(s)')
 
     list_option.add_argument('-l',
-                        '--list',
-                        choices=['tools', 'datasets'],
-                        nargs='+',
-                        action='list_option',
-                        help='list tools or datasets')
+                             '--list',
+                             choices=['tools', 'datasets'],
+                             nargs='+',
+                             action='list_option',
+                             help='list tools or datasets')
 
     info.add_argument('-i',
-                        '--info',
-                        choices=TOOLS_CHOICES,
-                        nargs='+',
-                        action='info',
-                        help='information about tool')
+                      '--info',
+                      choices=TOOLS_CHOICES,
+                      nargs='+',
+                      action='info',
+                      help='information about tool')
 
     info.add_argument('--skip-existing',
-                        action='store_true',
-                        help='skip the analysis that already have results')
+                      action='store_true',
+                      help='skip the analysis that already have results')
 
     info.add_argument('--processes',
-                        type=int,
-                        default=1,
-                        help='The number of parallel execution')
+                      type=int,
+                      default=1,
+                      help='The number of parallel execution')
 
     info.add_argument('--output-version',
-                        choices=VERSION_CHOICES,
-                        default='all',
-                        help='Smartbugs\' version output - v1: Json - v2:SARIF')
+                      choices=VERSION_CHOICES,
+                      default='all',
+                      help='Smartbugs\' version output - v1: Json - v2:SARIF')
 
     info.add_argument('--aggregate-sarif',
-                        action='store_true',
-                        help='Aggregate sarif outputs for different tools run on the same file')
+                      action='store_true',
+                      help='Aggregate sarif outputs for different tools run on the same file')
 
     info.add_argument('--import-path',
-                        type=str,
-                        default="FILE",     # different directory solidity imports will not work
-                        help="Project's root directory")
+                      type=str,
+                      default="FILE",  # different directory solidity imports will not work
+                      help="Project's root directory")
 
     info.add_argument('--unique-sarif-output',
                       action='store_true',
                       help='Aggregates all sarif analysis outputs in a single file')
 
     args = parser.parse_args()
-    return(args)
+    return args
+
+
+def create_parser_with_args(init_args):
+    parser = argparse.ArgumentParser(description="Static analysis of Ethereum smart contracts")
+    group_source_files = parser.add_mutually_exclusive_group(required='True')
+    group_tools = parser.add_mutually_exclusive_group(required='True')
+    parser._optionals.title = "options:"
+
+    parser.register('action', 'info', InfoAction)
+    info = parser.add_argument_group('info')
+
+    parser.register('action', 'list_option', ListAction)
+    list_option = parser.add_argument_group('list_option')
+
+    for name in cfg_dataset.items():
+        DATASET_CHOICES.append(name[0])
+
+        # list all subsets of remote datasets
+        if isRemoteDataset(cfg_dataset, name[0]):
+            remote_dataset = getRemoteDataset(cfg_dataset, name[0])
+            for sbset_name in remote_dataset['subsets']:
+                DATASET_CHOICES.append(name[0] + '/' + sbset_name)
+
+    # get tools available by parsing the name of the config files
+    tools = [os.path.splitext(f)[0] for f in os.listdir(CONFIG_TOOLS_PATH) if
+             os.path.isfile(os.path.join(CONFIG_TOOLS_PATH, f))]
+    for tool in tools:
+        TOOLS_CHOICES.append(tool)
+
+    group_source_files.add_argument('-f',
+                                    '--file',
+                                    nargs='*',
+                                    default=[],
+                                    help='select solidity file(s) or directories to be analysed')
+
+    group_source_files.add_argument('--dataset',
+                                    choices=DATASET_CHOICES,
+                                    help='pre made datasets',
+                                    nargs='+')
+
+    group_tools.add_argument('-t',
+                             '--tool',
+                             choices=TOOLS_CHOICES,
+                             nargs='+',
+                             help='select tool(s)')
+
+    list_option.add_argument('-l',
+                             '--list',
+                             choices=['tools', 'datasets'],
+                             nargs='+',
+                             action='list_option',
+                             help='list tools or datasets')
+
+    info.add_argument('-i',
+                      '--info',
+                      choices=TOOLS_CHOICES,
+                      nargs='+',
+                      action='info',
+                      help='information about tool')
+
+    info.add_argument('--skip-existing',
+                      action='store_true',
+                      help='skip the analysis that already have results')
+
+    info.add_argument('--processes',
+                      type=int,
+                      default=1,
+                      help='The number of parallel execution')
+
+    info.add_argument('--output-version',
+                      choices=VERSION_CHOICES,
+                      default='all',
+                      help='Smartbugs\' version output - v1: Json - v2:SARIF')
+
+    info.add_argument('--aggregate-sarif',
+                      action='store_true',
+                      help='Aggregate sarif outputs for different tools run on the same file')
+
+    info.add_argument('--import-path',
+                      type=str,
+                      default="FILE",  # different directory solidity imports will not work
+                      help="Project's root directory")
+
+    info.add_argument('--unique-sarif-output',
+                      action='store_true',
+                      help='Aggregates all sarif analysis outputs in a single file')
+
+    args = parser.parse_args(init_args)
+    return args
