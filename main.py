@@ -38,8 +38,13 @@ STRATEGY = 0.5  # 当有超过多少tools报出漏洞即认为可信
 TOOLS = ["honeybadger"]
 # TODO 合并漏洞类型
 ISSUE_UNKNOWN = Issue(0, "未知")
-ISSUE_INTEGER_OVERFLOW = Issue(1, "整数上溢")
-
+ISSUE_ARITHMETIC = Issue(1, "整数溢出")
+ISSUE_ACCESS_CONTROL = Issue(2,"访问控制")
+ISSUE_REENTRANCY = Issue(3,"重入")
+ISSUE_TIME_MANIPULATION = (4,"时间操纵")
+ISSUE_UNCHECKED_CALLS = Issue( 5,"未检查返回值")
+ISSUE_TRANSACTION_ORDER_DEPENDENCE = Issue(6,"交易顺序依赖")
+ISSUE_DOS = Issue(7,"拒绝服务")
 
 class Contract:
     def __init__(self, name: str, language: str, filepath: str):
