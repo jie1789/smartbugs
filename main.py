@@ -124,10 +124,11 @@ def phase_result_json_conkas(filepath: str) -> dict[str:Issue]:
     f = open(filepath)
     data = json.load(f)
     res = {}
-    for i in data[""]:
-        pos = ""
-        issue = ISSUE_UNKNOWN
-        res[pos] = ISSUE_UNKNOWN
+    for issue in data['analysis']:
+        line = issue['line_number']
+        title = issue['vuln_type']
+        issueType = mapping[title]
+        res.update({line:issueType})
     f.close()
     return res
 
@@ -137,10 +138,13 @@ def phase_result_json_mythril(filepath: str) -> dict[str:Issue]:
     f = open(filepath)
     data = json.load(f)
     res = {}
-    for i in data[""]:
-        pos = ""
-        issue = ISSUE_UNKNOWN
-        res[pos] = ISSUE_UNKNOWN
+    issues=jsonpath(data,"$..issues")
+    for issue in issues:
+        for iss in issue:
+            line=iss['lineno']
+            title=iss['title']
+            issueType = mapping[title]
+            res.update({line:issueType})
     f.close()
     return res
 
@@ -150,10 +154,13 @@ def phase_result_json_osiris(filepath: str) -> dict[str:Issue]:
     f = open(filepath)
     data = json.load(f)
     res = {}
-    for i in data[""]:
-        pos = ""
-        issue = ISSUE_UNKNOWN
-        res[pos] = ISSUE_UNKNOWN
+    issues=jsonpath(data,"$..errors")
+    for issue in issues:
+        for iss in issue:
+            line=iss['line']
+            title=iss['message']
+            issueType = mapping[title]
+            res.update({line:issueType})
     f.close()
     return res
 
@@ -163,10 +170,13 @@ def phase_result_json_slither(filepath: str) -> dict[str:Issue]:
     f = open(filepath)
     data = json.load(f)
     res = {}
-    for i in data[""]:
-        pos = ""
-        issue = ISSUE_UNKNOWN
-        res[pos] = ISSUE_UNKNOWN
+    for issue in data['analysis']:
+        title = issue['check']
+        lines=jsonpath(issue['elements'],"$..lines")
+        for li in lines:
+            for line in li:
+                issueType = mapping[title]
+                res.update({line:issueType})
     f.close()
     return res
 
@@ -176,10 +186,13 @@ def phase_result_json_oyente(filepath: str) -> dict[str:Issue]:
     f = open(filepath)
     data = json.load(f)
     res = {}
-    for i in data[""]:
-        pos = ""
-        issue = ISSUE_UNKNOWN
-        res[pos] = ISSUE_UNKNOWN
+    issues=jsonpath(data,"$..errors")
+    for issue in issues:
+        for iss in issue:
+            line=iss['line']
+            title=iss['message']
+            issueType = mapping[title]
+            res.update({line:issueType})
     f.close()
     return res
 
@@ -189,10 +202,11 @@ def phase_result_json_solhint(filepath: str) -> dict[str:Issue]:
     f = open(filepath)
     data = json.load(f)
     res = {}
-    for i in data[""]:
-        pos = ""
-        issue = ISSUE_UNKNOWN
-        res[pos] = ISSUE_UNKNOWN
+    for issue in data['analysis']:
+        line = issue['line']
+        title = issue['message']
+        issueType = mapping[title]
+        res.update({line:issueType})
     f.close()
     return res
 
