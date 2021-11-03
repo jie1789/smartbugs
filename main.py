@@ -52,7 +52,7 @@ ISSUE_TRANSACTION_ORDER_DEPENDENCE = Issue(6, "交易顺序依赖")
 ISSUE_DOS = Issue(7, "拒绝服务")
 ISSUE_RANDOM = Issue(8, "弱随机数")
 
-ISSUE_LIST = [ISSUE_ARITHMETIC, ISSUE_ACCESS_CONTROL, ISSUE_REENTRANCY, ISSUE_TIME_MANIPULATION, ISSUE_UNCHECKED_CALLS, ISSUE_TRANSACTION_ORDER_DEPENDENCE, ISSUE_DOS, ISSUE_RANDOM]
+ISSUE_LIST = [ISSUE_OTHER, ISSUE_ARITHMETIC, ISSUE_ACCESS_CONTROL, ISSUE_REENTRANCY, ISSUE_TIME_MANIPULATION, ISSUE_UNCHECKED_CALLS, ISSUE_TRANSACTION_ORDER_DEPENDENCE, ISSUE_DOS, ISSUE_RANDOM]
 
 VULNERABILITY_MAPPING = {
     "is_lock_vulnerable": ISSUE_OTHER,
@@ -334,7 +334,7 @@ def phase_result_json_conkas(filepath: str) -> (dict[int:list[Issue]], bool):
         f.close()
         return result, False
     for i in data['analysis']:
-        line = i['line_number']
+        line = int(i['line_number'])
         issue = VULNERABILITY_MAPPING[i['vuln_type']]
         if line not in result:
             result[line] = []
@@ -413,7 +413,7 @@ def phase_result_json_solhint(filepath: str) -> (dict[int:list[Issue]], bool):
     f = open(filepath)
     data = json.load(f)
     result = {}
-    if ("analysis" not in data) or (not data["analysis"]):
+    if "analysis" not in data:
         f.close()
         return result, False
     for i in data['analysis']:
@@ -430,7 +430,7 @@ def phase_result_json_smartcheck(filepath: str) -> (dict[int:list[Issue]], bool)
     f = open(filepath)
     data = json.load(f)
     result = {}
-    if ("analysis" not in data) or (not data["analysis"]):
+    if "analysis" not in data:
         f.close()
         return result, False
     for i in data["analysis"]:
