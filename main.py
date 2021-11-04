@@ -52,7 +52,8 @@ ISSUE_TRANSACTION_ORDER_DEPENDENCE = Issue(6, "交易顺序依赖")
 ISSUE_DOS = Issue(7, "拒绝服务")
 ISSUE_RANDOM = Issue(8, "弱随机数")
 
-ISSUE_LIST = [ISSUE_OTHER, ISSUE_ARITHMETIC, ISSUE_ACCESS_CONTROL, ISSUE_REENTRANCY, ISSUE_TIME_MANIPULATION, ISSUE_UNCHECKED_CALLS, ISSUE_TRANSACTION_ORDER_DEPENDENCE, ISSUE_DOS, ISSUE_RANDOM]
+ISSUE_LIST = [ISSUE_OTHER, ISSUE_ARITHMETIC, ISSUE_ACCESS_CONTROL, ISSUE_REENTRANCY, ISSUE_TIME_MANIPULATION,
+              ISSUE_UNCHECKED_CALLS, ISSUE_TRANSACTION_ORDER_DEPENDENCE, ISSUE_DOS, ISSUE_RANDOM]
 
 VULNERABILITY_MAPPING = {
     "is_lock_vulnerable": ISSUE_OTHER,
@@ -230,12 +231,12 @@ class Contract:
         self.language = language  # 语言种类
         self.filepath = filepath  # 源代码路径
 
-    def analyze(self, time_limit: int = 60, ) -> AnalysisResult:
+    def analyze(self) -> AnalysisResult:
         result = {}
         time_now = time.time()
         if not os.path.isdir("aggregated_result"):
             if os.path.exists("aggregated_result"):
-                print("[-]Error: Result dir `aggregated_result` is not empty")
+                print("[-]Error: Result dir \"aggregated_result\" is not empty")
                 exit()
             os.mkdir("aggregated_result")
         analysis_result = AnalysisResult(
@@ -256,18 +257,87 @@ class Contract:
                     flag = True
                     break
             if not flag:
-                print("[-]Error: tool {0} exec result not found, result filepath {1}".format(i, time_now_format_list))
+                print("[-]Error: contract {} tool {} exec result not found, result filepath {}".format(self.name, i, time_now_format_list))
                 continue
             result_i, ok = phase_result_json(result_json_filepath, i)
             if not ok:
                 print(
-                    "[-]Error: tool {0} exec result cannot phase, result filepath {1}".format(i, result_json_filepath))
+                    "[-]Error: contract {} tool {} exec result cannot phase, result filepath {}".format(self.name, i, result_json_filepath))
                 continue
             result[i] = result_i
         for position, issue_list in aggregate(result).items():
             analysis_result.add_issue(position, issue_list)
         analysis_result.save()
         return analysis_result
+
+
+class AnalysisTask:
+    def __init__(self, contracts: list[Contract]):
+        self.contracts = contracts
+
+    def exec_in_batch(self):
+        t0 = time.time()
+        print("[+]Info: task begins (exec in batch)")
+        result = {}
+        if not os.path.isdir("aggregated_result"):
+            if os.path.exists("aggregated_result"):
+                print("[-]Error: Result dir \"aggregated_result\" is not empty")
+                exit()
+            os.mkdir("aggregated_result")
+        analysis_results = {}  # 存储各合约执行结果dict[contract.name:analysis_result]
+        contract_files = []  # 各合约路径列表
+        for contract in self.contracts:
+            analysis_results[contract.name] = AnalysisResult(
+                "aggregated_result/" + time.strftime("%Y-%m-%d-%H-%M-%S", time.localtime(t0)) + "_" + contract.name)
+            contract_files.append(contract.filepath)
+        tool_start_time = {}  # 存储各工具开始执行的时间dict[tool: start time]
+        for tool in TOOLS:
+            time_now = time.time()
+            tool_start_time[tool] = time_now
+            smartBugs.exec_cmd(create_parser_with_args(["-t", tool, "-f"] + contract_files))
+        for contract in self.contracts:
+            for tool in TOOLS:
+                time_now_format_list = [time.strftime("%Y%m%d_%H%M", time.localtime(tool_start_time[tool] + 60)),
+                                        time.strftime("%Y%m%d_%H%M", time.localtime(tool_start_time[tool]))]  # 时间可能有误差
+                flag = False
+                result_json_filepath = ""
+                for time_now_format in time_now_format_list:
+                    result_json_filepath = "results/{0}/{1}/{2}/result.json".format(tool, time_now_format,
+                                                                                    contract.name)
+                    if os.path.exists(result_json_filepath):
+                        flag = True
+                        break
+                if not flag:
+                    print("[-]Error: contract {} tool {} exec result not found, result filepath {}".format(
+                        contract.filepath, tool, time_now_format_list))
+                    continue
+                result_tool, ok = phase_result_json(result_json_filepath, tool)
+                if not ok:
+                    print(
+                        "[-]Error: contract {} tool {} exec result cannot phase, result filepath {}".format(
+                            contract.filepath, tool, result_json_filepath))
+                    continue
+                result[tool] = result_tool
+            for position, issue_list in aggregate(result).items():
+                analysis_results[contract.name].add_issue(position, issue_list)
+            analysis_results[contract.name].save()
+        print("[+]Info: Task is finished, total time: {}".format(
+            time.strftime("%Hh%Mm%Ss", time.localtime(time.time() - t0 - 8*3600))))
+
+    def exec_in_order(self):
+        t0 = time.time()
+        print("[+]Info: task begins (exec in order)")
+        for contract in self.contracts:
+            t1 = time.time()
+            print("[+]Info: File {} analysis begins".format(contract.filepath))
+            result = contract.analyze()
+            t2 = time.time()
+            print("[+]Info: Save result of {} in {} successfully, time: {}".format(contract.filepath,
+                                                                                   result.output_filepath,
+                                                                                   time.strftime("%Hh%Mm%Ss",
+                                                                                                 time.localtime(t2 - t1 - 8*3600))))
+        print("[+]Info: Task is finished, total time: {}".format(
+            time.strftime("%Hh%Mm%Ss", time.localtime(time.time() - t0 - 8*3600))))
 
 
 # 聚合结果
@@ -290,11 +360,10 @@ def aggregate(result: dict[str:dict[int:Issue]]) -> dict[int:list[Issue]]:
                 statistical_result[line][issue] += 1
     for line, issue_count in statistical_result.items():
         for issue, count in issue_count.items():
-            if count >= STRATEGY*confidence_count[issue]:
+            if count >= STRATEGY * confidence_count[issue]:
                 if line not in aggregate_result:
                     aggregate_result[line] = []
                 aggregate_result[line].append(issue)
-    print(statistical_result)
     return aggregate_result
 
 
@@ -512,8 +581,26 @@ def phase_result_json_securify(filepath: str) -> (dict[int:list[Issue]], bool):
 
 
 if __name__ == '__main__':
-    print("[+]Analyzing start")
-    contract = Contract("integer_overflow_add", "solidity",
-                        "/Users/xiaoyao/PycharmProjects/smartbugs/dataset/arithmetic/integer_overflow_add.sol")
-    res = contract.analyze()
-    print("[+]Save result in {} successfully!".format(res.output_filepath))
+    print("[+]Info: Analyzing start")
+
+    parser = argparse.ArgumentParser(description='Use integrated tools to detect vulnerabilities of smart contract ('
+                                                 'solidity)')
+    parser.add_argument('files', metavar='FILE', type=str, nargs='+', help='smart contract files')
+    parser.add_argument('--mode', '-m', type=str, help='exec mode, \"order\": analyze contract by contract, '
+                                                       '\"batch\": analyze together', default="order")
+    args = parser.parse_args()
+    contracts = []
+    for file in args.files:
+        if not file.endswith(".sol") and os.path.isfile(file):
+            print("[-]Error: File \"{}\" is not a solidity file".format(file))
+        else:
+            _, name = os.path.split(file)
+            contracts.append(Contract(name[:-4], "solidity", file))
+    if len(contracts) == 0:
+        print("[-]Error: No file given, exit")
+        exit()
+    task = AnalysisTask(contracts)
+    if args.mode == "order":
+        task.exec_in_order()
+    elif args.mode == "batch":
+        task.exec_in_batch()
