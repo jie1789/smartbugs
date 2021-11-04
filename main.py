@@ -591,7 +591,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
     contracts = []
     for file in args.files:
-        if not file.endswith(".sol") and os.path.isfile(file):
+        if not (file.endswith(".sol") and os.path.isfile(file)):
             print("[-]Error: File \"{}\" is not a solidity file".format(file))
         else:
             _, name = os.path.split(file)
