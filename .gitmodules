@@ -1,0 +1,15 @@
+[submodule "openzeppelin"]
+	path = openzeppelin
+	url = https://github.com/OpenZeppelin/openzeppelin-contracts
+[submodule "@openzeppelin"]
+	path = @openzeppelin
+	url = https://github.com/OpenZeppelin/openzeppelin-contracts
+[submodule "@openzeppelinV4"]
+	path = @openzeppelinV4
+	url = https://github.com/OpenZeppelin/openzeppelin-contracts
+[submodule "@openzeppelinV3"]
+	path = @openzeppelinV3
+	url = https://github.com/OpenZeppelin/openzeppelin-contracts
+[submodule "@openzeppelinV2"]
+	path = @openzeppelinV2
+	url = https://github.com/OpenZeppelin/openzeppelin-contracts
