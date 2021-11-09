@@ -213,7 +213,6 @@ if __name__ == '__main__':
     parser.add_argument('path', metavar='PATH', type=str, help='directory or main file')
     parser.add_argument('--output_filepath', '-o', type=str, help='merged file output filepath', required=True)
     args = parser.parse_args()
-    args.output_filepath = "output/" + args.output_filepath
     if not args.output_filepath.endswith(".sol"):
         exit("output_filepath must be .sol file")
     if not os.path.exists(args.path):
