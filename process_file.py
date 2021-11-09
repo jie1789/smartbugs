@@ -1,9 +1,11 @@
+import argparse
 import os
 import re
 
 re_pragma = re.compile(r"pragma solidity \^?0.[0-9].[0-9]{1,2};")
 re_sol_version = re.compile(r"0.[0-9].[0-9]{1,2}")
-re_import_file = re.compile(r"import \"[@./a-zA-z0-9-_]+.sol\";")
+re_import_file1 = re.compile(r"import \"[@./a-zA-z0-9-_]+.sol\";")
+re_import_file2 = re.compile(r"import {[a-zA-z0-9_]+} from \"[@./a-zA-z0-9-_]+.sol\";")
 dir_path_openzeppelin = os.path.abspath("@openzeppelin")
 dir_path_openzeppelinV2 = os.path.abspath("@openzeppelinV2")
 dir_path_openzeppelinV3 = os.path.abspath("@openzeppelinV3")
@@ -103,17 +105,21 @@ class SolFile:
         source_code = self.file_data
         for pragma in pragmas:
             source_code = source_code.replace(pragma, "")
-        for import_file in re_import_file.findall(self.file_data):
+        for import_file in re_import_file1.findall(self.file_data) + re_import_file2.findall(self.file_data):
             source_code = source_code.replace(import_file, "")
         return source_code
 
     def _get_import_files(self) -> list:
-        imports = re_import_file.findall(self.file_data)
+        imports = re_import_file1.findall(self.file_data) + re_import_file2.findall(self.file_data)
         files = []
         for import_file in imports:
             self_filepath = self.filepath
-            filepath = os.path.abspath(
-                os.path.join(self_filepath.replace("/" + self.name + ".sol", ""), import_file[8:-2]))
+            if "from" in import_file:
+                filepath = os.path.abspath(
+                    os.path.join(self_filepath.replace("/" + self.name + ".sol", ""), import_file.split(" ")[3][1:-2]))
+            else:
+                filepath = os.path.abspath(
+                    os.path.join(self_filepath.replace("/" + self.name + ".sol", ""), import_file.split(" ")[1][1:-2]))
             new_sol_file = make_sol_file(filepath)
             merge_sol_version, ok = merge(self.sol_version, new_sol_file.sol_version)
             if not ok:
@@ -158,15 +164,15 @@ class SolFile:
         return text
 
     def save(self, target_filepath: str):
-        if os.path.exists(target_filepath):
-            target_filepath = "new" + target_filepath
+        while os.path.exists(target_filepath):
+            target_filepath = target_filepath[:-4]+"(1)"+target_filepath[-4:]
 
         with open(target_filepath, "w+") as f:
             f.write("pragma solidity {}{}.{}.{};\n".format("^" if self.sol_version.allow_higher else "",
                                                            self.sol_version.first,
                                                            self.sol_version.second,
                                                            self.sol_version.third) + self.output())
-        print("output file {}".format(target_filepath))
+        print("[+]output file {}".format(target_filepath))
 
 
 def make_sol_file(filepath: str) -> SolFile:
@@ -186,6 +192,54 @@ def format_sol_file(filepath: str, target_filepath: str):
     make_sol_file(filepath).save(target_filepath)
 
 
-format_sol_file(
-    "/Users/xiaoyao/PycharmProjects/smartbugs/yearn-starter-pack/contracts/strategies/StrategyDAICompoundBasic.sol",
-    "test.sol")
+# 找到根文件, main file
+def find_main_files(mapping: dict[str:SolFile]) -> list[str]:
+    print(mapping.keys())
+    res_main_files = []
+    not_main_files = set()
+    for filepath, sol_file in mapping.items():
+        not_main_files.update([import_file.filepath for import_file in sol_file.import_files])
+    for filepath, sol_file in mapping.items():
+        if filepath not in not_main_files:
+            res_main_files.append(filepath)
+    return res_main_files
+
+
+if __name__ == '__main__':
+    print("[+]Info: Processing file start")
+
+    parser = argparse.ArgumentParser(description='Preprocess the contract source code to obtain information ('
+                                                 'solidity)')
+    parser.add_argument('path', metavar='PATH', type=str, help='directory or main file')
+    parser.add_argument('--output_filepath', '-o', type=str, help='merged file output filepath', required=True)
+    args = parser.parse_args()
+    args.output_filepath = "output/" + args.output_filepath
+    if not args.output_filepath.endswith(".sol"):
+        exit("output_filepath must be .sol file")
+    if not os.path.exists(args.path):
+        exit("path {} do not exists".format(args.path))
+    if os.path.isdir(args.path):
+        solidity_files = []
+        for i, j, k in os.walk(args.path):
+            for m in k:
+                if m.endswith(".sol"):
+                    solidity_files.append(os.path.join(i, m))
+        print(solidity_files)
+        for solidity_file in solidity_files:
+            make_sol_file(solidity_file)
+        main_files = find_main_files(sol_file_mapping)
+        if len(main_files) == 1:
+            print("[+]main file: {}".format(main_files[0]))
+            format_sol_file(main_files[0], args.path)
+            exit(0)
+        if len(main_files) > 1:
+            print("[+]main files: {}".format(main_files))
+            for main_file in main_files:
+                format_sol_file(main_file, args.output_filepath[:-4]+"_"+sol_file_mapping[main_file].name+".sol")
+            exit(0)
+        exit("no main file")
+    elif args.path.endswith(".sol"):
+        format_sol_file(args.path, args.output_filepath)
+        exit(0)
+    exit("path {} is not a dir or a sol file".format(args.path))
+
