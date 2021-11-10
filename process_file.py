@@ -159,7 +159,7 @@ class SolFile:
             exit("circular import")
 
         text = ""
-        for filepath in filepath_in_order[::-1]:
+        for filepath in filepath_in_order:
             text += sol_file_mapping[filepath].source_code
         return text
 
@@ -193,14 +193,13 @@ def format_sol_file(filepath: str, target_filepath: str):
 
 
 # 找到根文件, main file
-def find_main_files(mapping: dict[str:SolFile]) -> list[str]:
-    print(mapping.keys())
+def find_main_files(mapping: dict[str:SolFile], only_contract: bool) -> list[str]:
     res_main_files = []
     not_main_files = set()
     for filepath, sol_file in mapping.items():
         not_main_files.update([import_file.filepath for import_file in sol_file.import_files])
     for filepath, sol_file in mapping.items():
-        if filepath not in not_main_files:
+        if ((not only_contract) or ("contract" in sol_file.source_code)) and (filepath not in not_main_files):
             res_main_files.append(filepath)
     return res_main_files
 
@@ -211,10 +210,13 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Preprocess the contract source code to obtain information ('
                                                  'solidity)')
     parser.add_argument('path', metavar='PATH', type=str, help='directory or main file')
-    parser.add_argument('--output_filepath', '-o', type=str, help='merged file output filepath', required=True)
+    parser.add_argument('--output_dir', '-o', type=str, help='merged file output directory', required=True)
+    parser.add_argument('--only_contract', '-oc', action="store_true", help='only output main file with contract')
     args = parser.parse_args()
-    if not args.output_filepath.endswith(".sol"):
-        exit("output_filepath must be .sol file")
+    if not os.path.exists(args.output_dir):
+        os.mkdir(args.output_dir)
+    if not os.path.isdir(args.output_dir):
+        exit("output_dir exists and is not a directory")
     if not os.path.exists(args.path):
         exit("path {} do not exists".format(args.path))
     if os.path.isdir(args.path):
@@ -223,10 +225,9 @@ if __name__ == '__main__':
             for m in k:
                 if m.endswith(".sol"):
                     solidity_files.append(os.path.join(i, m))
-        print(solidity_files)
         for solidity_file in solidity_files:
             make_sol_file(solidity_file)
-        main_files = find_main_files(sol_file_mapping)
+        main_files = find_main_files(sol_file_mapping, args.only_contract)
         if len(main_files) == 1:
             print("[+]main file: {}".format(main_files[0]))
             format_sol_file(main_files[0], args.path)
@@ -234,11 +235,11 @@ if __name__ == '__main__':
         if len(main_files) > 1:
             print("[+]main files: {}".format(main_files))
             for main_file in main_files:
-                format_sol_file(main_file, args.output_filepath[:-4]+"_"+sol_file_mapping[main_file].name+".sol")
+                format_sol_file(main_file, args.output_dir+"/o_"+sol_file_mapping[main_file].name+".sol")
             exit(0)
         exit("no main file")
     elif args.path.endswith(".sol"):
-        format_sol_file(args.path, args.output_filepath)
+        format_sol_file(args.path, args.output_dir+"/o_"+os.path.split(args.path)[1])
         exit(0)
     exit("path {} is not a dir or a sol file".format(args.path))
 
