@@ -2,8 +2,11 @@ import argparse
 import os
 import re
 
-re_pragma = re.compile(r"pragma solidity \^?0.[0-9].[0-9]{1,2};")
+re_pragma1 = re.compile(r"pragma solidity \^?0.[0-9].[0-9]{1,2};")
+re_pragma2 = re.compile(r"pragma solidity >=0.[0-9].[0-9]{1,2};")
+re_pragma3 = re.compile(r"pragma solidity >=0.[0-9].[0-9]{1,2} <0.[0-9].[0-9]{1,2};")
 re_sol_version = re.compile(r"0.[0-9].[0-9]{1,2}")
+re_license = re.compile(r"// SPDX-License-Identifier: [.a-zA-z0-9-_]+\+?")
 re_import_file1 = re.compile(r"import \"[@./a-zA-z0-9-_]+.sol\";")
 re_import_file2 = re.compile(r"import {[a-zA-z0-9_]+} from \"[@./a-zA-z0-9-_]+.sol\";")
 dir_path_openzeppelin = os.path.abspath("@openzeppelin")
@@ -77,36 +80,53 @@ class SolFile:
             self.file_data = f.read()
         if self._count_pragma_of_file() != 1:
             exit("file {} has {} version pragma".format(self.filepath, self._count_pragma_of_file()))
+        if self._count_license_of_file() != 1:
+            exit("file {} has {} license".format(self.filepath, self._count_license_of_file()))
         self.sol_version = self._get_sol_version()
+        self.license = self._get_license()
         self.import_files = self._get_import_files()
         self.source_code = self._get_source_code()
         print("new SolFile {}".format(self.filepath))
 
     #  "pragma solidity ^0.4.25" -> SolVersion(0, 4, 25, True), "pragma solidity 0.8.0" -> SolVersion(0, 8, 0, False)
     def _get_sol_version(self) -> SolVersion:
-        pragma = re_pragma.findall(self.file_data)[0]
+        if len(re_pragma1.findall(self.file_data)) != 0:
+            pragma = re_pragma1.findall(self.file_data)[0]
+        elif len(re_pragma2.findall(self.file_data)) != 0:
+            pragma = re_pragma2.findall(self.file_data)[0]
+        else:
+            pragma = re_pragma3.findall(self.file_data)[0]
         sol_version = SolVersion(0, 0, 0, True)
-        sol_version.allow_higher = ("^" in pragma)
+        sol_version.allow_higher = ("^" in pragma) or (">=" in pragma)
         sol_version_string_tuple = re_sol_version.findall(pragma)[0][:len(pragma) - 1].split(".")
         sol_version.first = int(sol_version_string_tuple[0])
         sol_version.second = int(sol_version_string_tuple[1])
         sol_version.third = int(sol_version_string_tuple[2])
         return sol_version
 
+    # SPDX - License - Identifier: MIT -> "MIT"
+    def _get_license(self) -> str:
+        return re_license.findall(self.file_data)[0][28:]
+
+    def _count_license_of_file(self) -> int:
+        return len(re_license.findall(self.file_data))
+
     def _is_file_solidity(self) -> bool:
         return self.filepath.endswith(".sol") and os.path.isfile(self.filepath)
 
     def _count_pragma_of_file(self) -> int:
-        pragmas = re_pragma.findall(self.file_data)
+        pragmas = re_pragma1.findall(self.file_data) + re_pragma2.findall(self.file_data) + re_pragma3.findall(self.file_data)
         return len(pragmas)
 
     def _get_source_code(self) -> str:
-        pragmas = re_pragma.findall(self.file_data)
+        pragmas = re_pragma1.findall(self.file_data) + re_pragma2.findall(self.file_data) + re_pragma3.findall(self.file_data)
         source_code = self.file_data
         for pragma in pragmas:
             source_code = source_code.replace(pragma, "")
         for import_file in re_import_file1.findall(self.file_data) + re_import_file2.findall(self.file_data):
             source_code = source_code.replace(import_file, "")
+        for spdx_license in re_license.findall(self.file_data):
+            source_code = source_code.replace(spdx_license, "")
         return source_code
 
     def _get_import_files(self) -> list:
@@ -165,13 +185,14 @@ class SolFile:
 
     def save(self, target_filepath: str):
         while os.path.exists(target_filepath):
-            target_filepath = target_filepath[:-4]+"(1)"+target_filepath[-4:]
+            target_filepath = target_filepath[:-4] + "(1)" + target_filepath[-4:]
 
         with open(target_filepath, "w+") as f:
-            f.write("pragma solidity {}{}.{}.{};\n".format("^" if self.sol_version.allow_higher else "",
-                                                           self.sol_version.first,
-                                                           self.sol_version.second,
-                                                           self.sol_version.third) + self.output())
+            f.write("// SPDX-License-Identifier: MIT\npragma solidity {}{}.{}.{};\n".format(
+                "^" if self.sol_version.allow_higher else "",
+                self.sol_version.first,
+                self.sol_version.second,
+                self.sol_version.third) + self.output())
         print("[+]output file {}".format(target_filepath))
 
 
@@ -220,6 +241,11 @@ if __name__ == '__main__':
     if not os.path.exists(args.path):
         exit("path {} do not exists".format(args.path))
     if os.path.isdir(args.path):
+        for k, v in openzeppelin_dir_mapping.items():
+            if k[:-1] in os.listdir(args.path):
+                openzeppelin_dir_mapping[k] = os.path.join(args.path, k[:-1] + "/")
+        if "@paulrberg" in os.listdir(args.path):
+            openzeppelin_dir_mapping["@paulrberg"] = os.path.join(args.path, "@paulrberg")
         solidity_files = []
         for i, j, k in os.walk(args.path):
             for m in k:
@@ -228,18 +254,13 @@ if __name__ == '__main__':
         for solidity_file in solidity_files:
             make_sol_file(solidity_file)
         main_files = find_main_files(sol_file_mapping, args.only_contract)
-        if len(main_files) == 1:
-            print("[+]main file: {}".format(main_files[0]))
-            format_sol_file(main_files[0], args.path)
-            exit(0)
-        if len(main_files) > 1:
+        if len(main_files) > 0:
             print("[+]main files: {}".format(main_files))
             for main_file in main_files:
-                format_sol_file(main_file, args.output_dir+"/o_"+sol_file_mapping[main_file].name+".sol")
+                format_sol_file(main_file, args.output_dir + "/o_" + sol_file_mapping[main_file].name + ".sol")
             exit(0)
         exit("no main file")
     elif args.path.endswith(".sol"):
-        format_sol_file(args.path, args.output_dir+"/o_"+os.path.split(args.path)[1])
+        format_sol_file(args.path, args.output_dir + "/o_" + os.path.split(args.path)[1])
         exit(0)
     exit("path {} is not a dir or a sol file".format(args.path))
-
