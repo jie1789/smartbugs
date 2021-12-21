@@ -23,8 +23,10 @@ from src.output_parser.Securify import Securify
 from src.output_parser.Slither import Slither
 from src.output_parser.Smartcheck import Smartcheck
 from src.output_parser.Solhint import Solhint
-from src.output_parser.Myth import Myth
-
+from src.output_parser.Mythril2 import Mythril2
+from src.output_parser.Slither2 import Slither2
+from src.output_parser.Manticore2 import Manticore2
+from src.output_parser.Securify2 import Securify2
 from time import time
 
 
@@ -139,9 +141,6 @@ def parse_results(output, tool, file_name, container, cfg, logs, results_folder,
             results['analysis'] = Oyente().parse(output)
             # Sarif Conversion
             sarif_holder.addRun(Oyente().parseSarif(results, file_path_in_repo))
-        elif tool == 'myth':
-            results['analysis'] = Myth().parse(output)
-            sarif_holder.addRun(Myth().parseSarif(results,file_path_in_repo))
         elif tool == 'osiris':
             results['analysis'] = Osiris().parse(output)
             sarif_holder.addRun(Osiris().parseSarif(results, file_path_in_repo))
@@ -160,6 +159,9 @@ def parse_results(output, tool, file_name, container, cfg, logs, results_folder,
         elif tool == 'mythril':
             results['analysis'] = json.loads(output)
             sarif_holder.addRun(Mythril().parseSarif(results, file_path_in_repo))
+        elif tool == 'mythril2':
+            results['analysis'] = json.loads(output)
+            sarif_holder.addRun(Mythril2().parseSarif(results,file_path_in_repo))
         elif tool == 'securify':
             if len(output) > 0 and output[0] == '{':
                 results['analysis'] = json.loads(output)
@@ -178,12 +180,36 @@ def parse_results(output, tool, file_name, container, cfg, logs, results_folder,
                         }
                     }
                     sarif_holder.addRun(Securify().parseSarifFromLiveJson(results, file_path_in_repo))
+        elif tool == 'securify2':
+            if len(output) > 0 and output[0] == '{':
+                results['analysis'] = json.loads(output)
+            elif os.path.exists(os.path.join(output_folder, 'result.tar')):
+                tar = tarfile.open(os.path.join(output_folder, 'result.tar'))
+                try:
+                    output_file = tar.extractfile('results/results.json')
+                    results['analysis'] = json.loads(output_file.read())
+                    sarif_holder.addRun(Securify2().parseSarif(results, file_path_in_repo))
+                except Exception as e:
+                    print('pas terrible')
+                    output_file = tar.extractfile('results/live.json')
+                    results['analysis'] = {
+                        file_name: {
+                            'results': json.loads(output_file.read())["patternResults"]
+                        }
+                    }
+                    sarif_holder.addRun(Securify2().parseSarifFromLiveJson(results, file_path_in_repo))
         elif tool == 'slither':
             if os.path.exists(os.path.join(output_folder, 'result.tar')):
                 tar = tarfile.open(os.path.join(output_folder, 'result.tar'))
                 output_file = tar.extractfile('output.json')
                 results['analysis'] = json.loads(output_file.read())
                 sarif_holder.addRun(Slither().parseSarif(results, file_path_in_repo))
+        elif tool == 'slither2':
+            if os.path.exists(os.path.join(output_folder, 'result.tar')):
+                tar = tarfile.open(os.path.join(output_folder, 'result.tar'))
+                output_file = tar.extractfile('output.json')
+                results['analysis'] = json.loads(output_file.read())
+                sarif_holder.addRun(Slither2().parseSarif(results, file_path_in_repo))
         elif tool == 'manticore':
             if os.path.exists(os.path.join(output_folder, 'result.tar')):
                 tar = tarfile.open(os.path.join(output_folder, 'result.tar'))
@@ -193,6 +219,15 @@ def parse_results(output, tool, file_name, container, cfg, logs, results_folder,
                     output_file = tar.extractfile('results/' + fout + '/global.findings')
                     results['analysis'].append(Manticore().parse(output_file.read().decode('utf8')))
                 sarif_holder.addRun(Manticore().parseSarif(results, file_path_in_repo))
+        elif tool == 'manticore2':
+            if os.path.exists(os.path.join(output_folder, 'result.tar')):
+                tar = tarfile.open(os.path.join(output_folder, 'result.tar'))
+                m = re.findall('Results in /(mcore_.+)', output)
+                results['analysis'] = []
+                for fout in m:
+                    output_file = tar.extractfile('results/' + fout + '/global.findings')
+                    results['analysis'].append(Manticore2().parse(output_file.read().decode('utf8')))
+                sarif_holder.addRun(Manticore2().parseSarif(results, file_path_in_repo))
         elif tool == 'conkas':
             results['analysis'] = Conkas().parse(output)
             sarif_holder.addRun(Conkas().parseSarif(results, file_path_in_repo))
@@ -200,8 +235,6 @@ def parse_results(output, tool, file_name, container, cfg, logs, results_folder,
         sarif_outputs[file_name] = sarif_holder
 
     except Exception as e:
-        print(output)
-        print(e)
         # ignore
         pass
 
@@ -277,23 +310,34 @@ def analyse_files(tool, file, logs, now, sarif_outputs, output_version, import_p
         else:
             cmd += ' /data/' + os.path.basename(file)
 
-        with open(file) as f:
-            file_data = f.read()
-            pattern = re.compile(r'pragma solidity (.?[0-9]+)+', re.I)
-            a=pattern.search(file_data)
-            b=str(a.group())
-            c=re.search(r'([0-9]+.?)+',b)
-            c=c.group()
-            if '{solv}' in cmd:
-                cmd = cmd.replace('{solv}' ,'--solv ' +'"'+c+'"')
-                
+        if '{version}' in cmd:
+            with open(file) as f:
+                file_data = f.read()
+                pattern = re.compile(r'pragma solidity (>=)?(.?[0-9]+)+', re.I)
+                a=pattern.search(file_data)
+                b=str(a.group())
+                c=re.search(r'([0-9]+.?)+',b)
+                c=c.group()
+                cmd = cmd.replace('{version}' ,c)
+        
+        print(cmd)
         container = None
+        img = ["trailofbits/eth-security-toolbox","mythril/myth","securify"]
         try:
-            container = client.containers.run(image,
+            if image in img:
+                container = client.containers.run(image,
                                               cmd,
                                               detach=True,
                                               # cpu_quota=150000,
-                                              volumes=volume_bindings)
+                                              volumes=volume_bindings,
+                                              entrypoint="")
+            else:                                  
+                container = client.containers.run(image,
+                                                cmd,
+                                                detach=True,
+                                                # cpu_quota=150000,
+                                                volumes=volume_bindings
+                                                )
             try:
                 container.wait(timeout=(30 * 60))
             except Exception as e:
