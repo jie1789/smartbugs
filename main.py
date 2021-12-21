@@ -24,7 +24,7 @@ class AnalysisResult:
         self.output_filepath = output_filepath
         self.issues = {}
 
-    def add_issue(self, position: str, issue_list: list[Issue]):
+    def add_issue(self, position: str, issue_list):
         self.issues[position] = issue_list
 
     def save(self):
@@ -38,8 +38,11 @@ class AnalysisResult:
 
 
 STRATEGY = 0  # 当有超过多少tools报出漏洞即认为可信
-TOOLS = ["conkas", "mythril", "osiris", "slither", "oyente", "solhint", "smartcheck", "honeybadger", "manticore",
-         "maian", "securify"]
+# TOOLS = ["conkas", "mythril", "osiris", "slither", "oyente", "solhint", "smartcheck", "honeybadger", "manticore",
+#          "maian", "securify"]
+
+TOOLS = ["slither"]
+
 
 ISSUE_UNKNOWN = Issue(-1, "未知")
 ISSUE_OTHER = Issue(0, "其他")
@@ -246,9 +249,11 @@ class Contract:
             time_now = time.time()
             tool_start_time[i] = time_now
             smartBugs.exec_cmd(create_parser_with_args(["-t", i, "-f", self.filepath]))
+            
         for i in TOOLS:
             time_now_format_list = [time.strftime("%Y%m%d_%H%M", time.localtime(tool_start_time[i] + 60)),
                                     time.strftime("%Y%m%d_%H%M", time.localtime(tool_start_time[i]))]  # 时间可能有误差
+            
             flag = False
             result_json_filepath = ""
             for time_now_format in time_now_format_list:
@@ -272,7 +277,7 @@ class Contract:
 
 
 class AnalysisTask:
-    def __init__(self, contracts: list[Contract]):
+    def __init__(self, contracts):
         self.contracts = contracts
 
     def exec_in_batch(self):
@@ -341,7 +346,7 @@ class AnalysisTask:
 
 
 # 聚合结果
-def aggregate(result: dict[str:dict[int:Issue]]) -> dict[int:list[Issue]]:
+def aggregate(result) :
     aggregate_result = {}
     statistical_result = {}
     confidence_count = {}
@@ -360,14 +365,14 @@ def aggregate(result: dict[str:dict[int:Issue]]) -> dict[int:list[Issue]]:
                 statistical_result[line][issue] += 1
     for line, issue_count in statistical_result.items():
         for issue, count in issue_count.items():
-            if count >= STRATEGY * confidence_count[issue] and (issue != ISSUE_OTHER):
+            if (count >= STRATEGY * confidence_count[issue]) and issue != ISSUE_OTHER and issue != ISSUE_UNKNOWN:
                 if line not in aggregate_result:
                     aggregate_result[line] = []
                 aggregate_result[line].append(issue)
     return aggregate_result
 
 
-def phase_result_json(filepath: str, tool: str) -> (dict[int:list[Issue]], bool):
+def phase_result_json(filepath: str, tool: str) :
     if tool == "conkas":
         return phase_result_json_conkas(filepath)
     elif tool == "mythril":
@@ -395,7 +400,7 @@ def phase_result_json(filepath: str, tool: str) -> (dict[int:list[Issue]], bool)
         return {}, False
 
 
-def phase_result_json_conkas(filepath: str) -> (dict[int:list[Issue]], bool):
+def phase_result_json_conkas(filepath: str) :
     f = open(filepath)
     data = json.load(f)
     result = {}
@@ -412,7 +417,7 @@ def phase_result_json_conkas(filepath: str) -> (dict[int:list[Issue]], bool):
     return result, True
 
 
-def phase_result_json_mythril(filepath: str) -> (dict[int:list[Issue]], bool):
+def phase_result_json_mythril(filepath: str):
     f = open(filepath)
     data = json.load(f)
     result = {}
@@ -428,7 +433,7 @@ def phase_result_json_mythril(filepath: str) -> (dict[int:list[Issue]], bool):
     return result, True
 
 
-def phase_result_json_osiris(filepath: str) -> (dict[int:list[Issue]], bool):
+def phase_result_json_osiris(filepath: str):
     f = open(filepath)
     data = json.load(f)
     result = {}
@@ -444,7 +449,7 @@ def phase_result_json_osiris(filepath: str) -> (dict[int:list[Issue]], bool):
     return result, True
 
 
-def phase_result_json_slither(filepath: str) -> (dict[int:list[Issue]], bool):
+def phase_result_json_slither(filepath: str):
     f = open(filepath)
     data = json.load(f)
     result = {}
@@ -461,7 +466,7 @@ def phase_result_json_slither(filepath: str) -> (dict[int:list[Issue]], bool):
     return result, True
 
 
-def phase_result_json_oyente(filepath: str) -> (dict[int:list[Issue]], bool):
+def phase_result_json_oyente(filepath: str):
     f = open(filepath)
     data = json.load(f)
     result = {}
@@ -477,7 +482,7 @@ def phase_result_json_oyente(filepath: str) -> (dict[int:list[Issue]], bool):
     return result, True
 
 
-def phase_result_json_solhint(filepath: str) -> (dict[int:list[Issue]], bool):
+def phase_result_json_solhint(filepath: str) :
     # TODO
     f = open(filepath)
     data = json.load(f)
@@ -495,7 +500,7 @@ def phase_result_json_solhint(filepath: str) -> (dict[int:list[Issue]], bool):
     return result, True
 
 
-def phase_result_json_smartcheck(filepath: str) -> (dict[int:list[Issue]], bool):
+def phase_result_json_smartcheck(filepath: str) :
     f = open(filepath)
     data = json.load(f)
     result = {}
@@ -512,7 +517,7 @@ def phase_result_json_smartcheck(filepath: str) -> (dict[int:list[Issue]], bool)
     return result, True
 
 
-def phase_result_json_honeybadger(filepath: str) -> (dict[int:list[Issue]], bool):
+def phase_result_json_honeybadger(filepath: str) :
     f = open(filepath)
     data = json.load(f)
     result = {}
@@ -529,7 +534,7 @@ def phase_result_json_honeybadger(filepath: str) -> (dict[int:list[Issue]], bool
     return result, True
 
 
-def phase_result_json_manticore(filepath: str) -> (dict[int:list[Issue]], bool):
+def phase_result_json_manticore(filepath: str):
     f = open(filepath)
     data = json.load(f)
     result = {}
@@ -546,7 +551,7 @@ def phase_result_json_manticore(filepath: str) -> (dict[int:list[Issue]], bool):
     return result, True
 
 
-def phase_result_json_maian(filepath: str) -> (dict[int:list[Issue]], bool):
+def phase_result_json_maian(filepath: str) :
     f = open(filepath)
     data = json.load(f)
     result = {}
@@ -563,7 +568,7 @@ def phase_result_json_maian(filepath: str) -> (dict[int:list[Issue]], bool):
     return result, True
 
 
-def phase_result_json_securify(filepath: str) -> (dict[int:list[Issue]], bool):
+def phase_result_json_securify(filepath: str) :
     f = open(filepath)
     data = json.load(f)
     result = {}
