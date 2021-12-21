@@ -360,7 +360,7 @@ def aggregate(result: dict[str:dict[int:Issue]]) -> dict[int:list[Issue]]:
                 statistical_result[line][issue] += 1
     for line, issue_count in statistical_result.items():
         for issue, count in issue_count.items():
-            if count >= STRATEGY * confidence_count[issue]:
+            if count >= STRATEGY * confidence_count[issue] and (issue != ISSUE_OTHER):
                 if line not in aggregate_result:
                     aggregate_result[line] = []
                 aggregate_result[line].append(issue)
