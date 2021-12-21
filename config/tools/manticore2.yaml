@@ -1,0 +1,5 @@
+docker_image:
+  default: trailofbits/eth-security-toolbox
+cmd: manticore {contract} --solc /usr/bin/solc-v{version}
+
+info: Manticore is a symbolic execution tool for analysis of smart contracts and binaries.
